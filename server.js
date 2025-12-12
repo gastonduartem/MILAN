@@ -8,10 +8,15 @@ const { pool } = require("./db");
 
 const app = express();
 
-app.set("trust proxy", 1); // Render / proxies
+app.set("trust proxy", 1);
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+if (!process.env.SESSION_SECRET) {
+  console.error("❌ SESSION_SECRET no está definido en variables de entorno.");
+  process.exit(1);
+}
 
 app.use(
   session({
@@ -53,35 +58,47 @@ function validateOrder(body) {
   return { ok: true, data: { real_name, number, back_text, size } };
 }
 
+async function safeQuery(res, fn) {
+  try {
+    return await fn();
+  } catch (err) {
+    console.error("DB ERROR:", err);
+    return res.status(500).json({ error: "Error de base de datos" });
+  }
+}
+
 // ---------- Public API ----------
 app.get("/api/orders", async (req, res) => {
-  const { rows } = await pool.query(
-    "select id, real_name, number, back_text, size, created_at from public.orders order by number asc"
-  );
-  res.json(rows);
+  return safeQuery(res, async () => {
+    const { rows } = await pool.query(
+      "select id, real_name, number, back_text, size, created_at from public.orders order by number asc"
+    );
+    res.json(rows);
+  });
 });
 
 app.post("/api/orders", async (req, res) => {
   const v = validateOrder(req.body);
   if (!v.ok) return res.status(400).json({ error: v.error });
 
-  try {
-    const { real_name, number, back_text, size } = v.data;
-    const { rows } = await pool.query(
-      `insert into public.orders (real_name, number, back_text, size)
-       values ($1,$2,$3,$4)
-       returning id, real_name, number, back_text, size, created_at`,
-      [real_name, number, back_text, size]
-    );
-    res.status(201).json(rows[0]);
-  } catch (err) {
-    // unique constraint de number
-    if (String(err.code) === "23505") {
-      return res.status(409).json({ error: "Ese número ya está ocupado" });
+  return safeQuery(res, async () => {
+    try {
+      const { real_name, number, back_text, size } = v.data;
+      const { rows } = await pool.query(
+        `insert into public.orders (real_name, number, back_text, size)
+         values ($1,$2,$3,$4)
+         returning id, real_name, number, back_text, size, created_at`,
+        [real_name, number, back_text, size]
+      );
+      res.status(201).json(rows[0]);
+    } catch (err) {
+      if (String(err.code) === "23505") {
+        return res.status(409).json({ error: "Ese número ya está ocupado" });
+      }
+      console.error(err);
+      return res.status(500).json({ error: "Error del servidor" });
     }
-    console.error(err);
-    res.status(500).json({ error: "Error del servidor" });
-  }
+  });
 });
 
 // ---------- Admin API ----------
@@ -89,7 +106,14 @@ app.post("/api/admin/login", async (req, res) => {
   const user = String(req.body.user || "");
   const pass = String(req.body.pass || "");
 
-  if (user !== process.env.ADMIN_USER) return res.status(401).json({ error: "Credenciales inválidas" });
+  if (!process.env.ADMIN_USER || !process.env.ADMIN_PASS_HASH) {
+    console.error("❌ ADMIN_USER o ADMIN_PASS_HASH no están configurados en env.");
+    return res.status(500).json({ error: "Admin no configurado" });
+  }
+
+  if (user !== process.env.ADMIN_USER) {
+    return res.status(401).json({ error: "Credenciales inválidas" });
+  }
 
   const ok = await bcrypt.compare(pass, process.env.ADMIN_PASS_HASH || "");
   if (!ok) return res.status(401).json({ error: "Credenciales inválidas" });
@@ -103,69 +127,77 @@ app.post("/api/admin/logout", (req, res) => {
 });
 
 app.get("/api/admin/orders", requireAdmin, async (req, res) => {
-  const { rows } = await pool.query(
-    "select id, real_name, number, back_text, size, created_at from public.orders order by number asc"
-  );
-  res.json(rows);
+  return safeQuery(res, async () => {
+    const { rows } = await pool.query(
+      "select id, real_name, number, back_text, size, created_at from public.orders order by number asc"
+    );
+    res.json(rows);
+  });
 });
 
 app.put("/api/admin/orders/:id", requireAdmin, async (req, res) => {
   const id = req.params.id;
 
-  // Validamos igual que público
   const v = validateOrder(req.body);
   if (!v.ok) return res.status(400).json({ error: v.error });
 
-  try {
-    const { real_name, number, back_text, size } = v.data;
-    const { rows } = await pool.query(
-      `update public.orders
-       set real_name=$1, number=$2, back_text=$3, size=$4
-       where id=$5
-       returning id, real_name, number, back_text, size, created_at`,
-      [real_name, number, back_text, size, id]
-    );
-    if (!rows[0]) return res.status(404).json({ error: "No existe" });
-    res.json(rows[0]);
-  } catch (err) {
-    if (String(err.code) === "23505") {
-      return res.status(409).json({ error: "Ese número ya está ocupado" });
+  return safeQuery(res, async () => {
+    try {
+      const { real_name, number, back_text, size } = v.data;
+      const { rows } = await pool.query(
+        `update public.orders
+         set real_name=$1, number=$2, back_text=$3, size=$4
+         where id=$5
+         returning id, real_name, number, back_text, size, created_at`,
+        [real_name, number, back_text, size, id]
+      );
+      if (!rows[0]) return res.status(404).json({ error: "No existe" });
+      res.json(rows[0]);
+    } catch (err) {
+      if (String(err.code) === "23505") {
+        return res.status(409).json({ error: "Ese número ya está ocupado" });
+      }
+      console.error(err);
+      return res.status(500).json({ error: "Error del servidor" });
     }
-    console.error(err);
-    res.status(500).json({ error: "Error del servidor" });
-  }
+  });
 });
 
 app.delete("/api/admin/orders/:id", requireAdmin, async (req, res) => {
   const id = req.params.id;
-  const { rowCount } = await pool.query("delete from public.orders where id=$1", [id]);
-  if (!rowCount) return res.status(404).json({ error: "No existe" });
-  res.json({ ok: true });
+
+  return safeQuery(res, async () => {
+    const { rowCount } = await pool.query("delete from public.orders where id=$1", [id]);
+    if (!rowCount) return res.status(404).json({ error: "No existe" });
+    res.json({ ok: true });
+  });
 });
 
 app.get("/api/admin/export.xlsx", requireAdmin, async (req, res) => {
-  const { rows } = await pool.query(
-    "select real_name, number, back_text, size, created_at from public.orders order by number asc"
-  );
+  return safeQuery(res, async () => {
+    const { rows } = await pool.query(
+      "select real_name, number, back_text, size, created_at from public.orders order by number asc"
+    );
 
-  const wb = new ExcelJS.Workbook();
-  const ws = wb.addWorksheet("Pedidos");
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet("Pedidos");
 
-  ws.columns = [
-    { header: "Nombre", key: "real_name", width: 28 },
-    { header: "Numero", key: "number", width: 10 },
-    { header: "Atras", key: "back_text", width: 18 },
-    { header: "Talle", key: "size", width: 10 },
-    { header: "Creado", key: "created_at", width: 22 }
-  ];
+    ws.columns = [
+      { header: "Nombre", key: "real_name", width: 28 },
+      { header: "Numero", key: "number", width: 10 },
+      { header: "Atras", key: "back_text", width: 18 },
+      { header: "Talle", key: "size", width: 10 },
+      { header: "Creado", key: "created_at", width: 22 }
+    ];
 
-  rows.forEach(r => ws.addRow(r));
-  ws.getRow(1).font = { bold: true };
+    rows.forEach(r => ws.addRow(r));
+    ws.getRow(1).font = { bold: true };
 
-  res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-  res.setHeader("Content-Disposition", "attachment; filename=\"milan_pedidos.xlsx\"");
-  await wb.xlsx.write(res);
-  res.end();
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    res.setHeader("Content-Disposition", "attachment; filename=\"milan_pedidos.xlsx\"");
+    await wb.xlsx.write(res);
+    res.end();
+  });
 });
 
 app.listen(process.env.PORT || 3000, () => {
