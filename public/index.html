@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>MILAN - Pedidos de Remera</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <div class="crest"></div>
+      <div>
+        <h1>MILAN</h1>
+        <p>Pedidos de remera</p>
+      </div>
+    </div>
+    <a class="adminlink" href="/admin.html">Admin</a>
+  </header>
+
+  <main class="wrap">
+    <section class="card">
+      <h2>Lista de pedidos</h2>
+      <div class="tablewrap">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Nombre</th>
+              <th>Atrás</th>
+              <th>Talle</th>
+            </tr>
+          </thead>
+          <tbody id="ordersBody"></tbody>
+        </table>
+      </div>
+      <p class="hint" id="count"></p>
+    </section>
+
+    <section class="card">
+      <h2>Agregar mi pedido</h2>
+      <form id="orderForm" class="form">
+        <label>
+          Nombre real
+          <input name="real_name" maxlength="60" required />
+        </label>
+
+        <label>
+          Número (1-99)
+          <input name="number" type="number" min="1" max="99" required />
+        </label>
+
+        <label>
+          Texto atrás (máx 15)
+          <input name="back_text" maxlength="15" required />
+        </label>
+
+        <label>
+          Talle
+          <select name="size" required>
+            <option value="">Elegí...</option>
+            <option>XS</option><option>S</option><option>M</option><option>L</option>
+            <option>XL</option><option>XXL</option><option>XXXL</option><option>XXXXL</option>
+          </select>
+        </label>
+
+        <button type="submit">Cargar</button>
+        <p class="msg" id="msg"></p>
+      </form>
+    </section>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>

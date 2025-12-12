@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Admin - MILAN</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <div class="crest"></div>
+      <div>
+        <h1>Admin</h1>
+        <p>Editar / borrar / exportar Excel</p>
+      </div>
+    </div>
+    <a class="adminlink" href="/">Volver</a>
+  </header>
+
+  <main class="wrap">
+    <section class="card" id="loginCard">
+      <h2>Login</h2>
+      <form id="loginForm" class="form">
+        <label>Usuario <input name="user" required /></label>
+        <label>Contraseña <input name="pass" type="password" required /></label>
+        <button type="submit">Entrar</button>
+        <p class="msg" id="loginMsg"></p>
+      </form>
+    </section>
+
+    <section class="card hidden" id="panelCard">
+      <div class="panelTop">
+        <h2>Pedidos</h2>
+        <div class="panelBtns">
+          <a class="btnlink" href="/api/admin/export.xlsx">Descargar Excel</a>
+          <button id="logoutBtn" class="ghost">Salir</button>
+        </div>
+      </div>
+
+      <div class="tablewrap">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th><th>Nombre</th><th>Atrás</th><th>Talle</th><th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody id="adminBody"></tbody>
+        </table>
+      </div>
+
+      <p class="msg" id="adminMsg"></p>
+    </section>
+  </main>
+
+  <script src="/admin.js"></script>
+</body>
+</html>
